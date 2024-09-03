@@ -133,13 +133,49 @@ return {
 		},
 	},
 	config = function()
+		local dap = require("dap")
+		dap.adapters = { "gdb" }
+		dap.configurations.c = {
+			{
+				name = "Launch",
+				type = "gdb",
+				request = "launch",
+				program = function()
+					return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/", "file")
+				end,
+				cwd = "${workspaceFolder}",
+				stopAtBeginningOfMainSubprogram = false,
+			},
+			{
+				name = "Select and attach to process",
+				type = "gdb",
+				request = "attach",
+				program = function()
+					return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/", "file")
+				end,
+				pid = function()
+					local name = vim.fn.input("Executable name (filter): ")
+					return require("dap.utils").pick_process({ filter = name })
+				end,
+				cwd = "${workspaceFolder}",
+			},
+			{
+				name = "Attach to gdbserver :1234",
+				type = "gdb",
+				request = "attach",
+				target = "localhost:1234",
+				program = function()
+					return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/", "file")
+				end,
+				cwd = "${workspaceFolder}",
+			},
+		}
 		require("dap-vscode-js").setup({
 			debugger_path = vim.fn.stdpath("data") .. "/lazy/vscode-js-debug",
-			adapters = { "pwa-node", "pwa-chrome", "pwa-msedge", "node-terminal", "pwa-extensionHost" },
 		})
 
 		for _, language in ipairs({ "typescript", "javascript", "svelte" }) do
-			require("dap").configurations[language] = {
+			dap.configurations[language] = {
 				-- attach to a node process that has been started with
 				-- --inspect for longrunning tasks or --inspect-brk for short tasks
 				-- npm script -> node --inspect-brk ./node_modules/.bin/vite dev
@@ -195,7 +231,7 @@ return {
 		end
 
 		require("dapui").setup()
-		local dap, dapui = require("dap"), require("dapui")
+		local dapui = require("dapui")
 		dap.listeners.after.event_initialized["dapui_config"] = function()
 			dapui.open({ reset = true })
 		end

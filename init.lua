@@ -1,3 +1,4 @@
+require("config.lazy")
 ------------- Autocommands ----------------------
 -- Highlight when yanking (copying) text
 --  Try it with yap in normal mode
@@ -9,10 +10,8 @@ vim.api.nvim_create_autocmd("TextYankPost", {
 		vim.highlight.on_yank()
 	end,
 })
-
 ------------- Import -------------------------
 --- import lazy
-require("config.lazy")
 
 vim.cmd.colorscheme("rose-pine")
 

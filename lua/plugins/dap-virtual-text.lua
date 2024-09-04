@@ -1,3 +1,4 @@
 return {
-	"nvim-dap-virtual-text",
+	"theHamsta/nvim-dap-virtual-text",
+	opts = {},
 }

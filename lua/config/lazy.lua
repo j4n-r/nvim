@@ -43,6 +43,13 @@ vim.opt.softtabstop = 4
 vim.opt.shiftwidth = 4
 vim.opt.hlsearch = true
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>")
+vim.keymap.set("n", "<leader>t", "<cmd>terminal<CR>")
+vim.keymap.set("t", "<C-e>", "<C-\\><C-n>", { noremap = true, silent = true })
+vim.keymap.set("n", "<C-h>", "<C-w>h")
+vim.keymap.set("n", "<C-j>", "<C-w>j")
+vim.keymap.set("n", "<C-k>", "<C-w>k")
+vim.keymap.set("n", "<C-l>", "<C-w>l")
+vim.keymap.set("i", "<C-\\>", "<C-\\><C-n>")
 
 -- Setup lazy.nvim
 require("lazy").setup({

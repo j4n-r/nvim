@@ -32,4 +32,17 @@ cmp.setup({
 		return vim.g.cmptoggle
 	end,
 })
-vim.keymap.set("n", "cmp", "<cmd>lua vim.g.cmptoggle = not vim.g.cmptoggle<CR>", { desc = "toggle nvim-cmp" })
+vim.keymap.set("n", "<leader>ac", "<cmd>lua vim.g.cmptoggle = not vim.g.cmptoggle<CR>", { desc = "toggle nvim-cmp" })
+
+vim.g.firenvim_config = {
+	globalSettings = { alt = "all" },
+	localSettings = {
+		[".*"] = {
+			cmdline = "neovim",
+			content = "text",
+			priority = 0,
+			selector = "textarea",
+			takeover = "never",
+		},
+	},
+}

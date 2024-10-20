@@ -97,9 +97,26 @@ return { -- LSP Configuration & Plugins
 		--        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
 		local servers = {
 			clangd = {},
-			gopls = {},
-			pylsp = {}, -- rust_analyzer = {},
-			-- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
+			ruff_lsp = {
+				trace = "message",
+				init_options = {
+					settings = {
+						logLevel = "debug",
+					},
+				},
+			},
+			ts_ls = {},
+			-- gopls = {},
+			pyright = {
+				-- Using Ruff's import organizer
+				disableOrganizeImports = true,
+				python = {
+					analysis = {
+						-- Ignore all files for analysis to exclusively use Ruff for linting
+						ignore = { "*" },
+					},
+				}, -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
+			},
 			--
 			-- Some languages (like typescript) have entire language plugins that can be useful:
 			--    https://github.com/pmizio/typescript-tools.nvim
@@ -129,7 +146,8 @@ return { -- LSP Configuration & Plugins
 			"stylua", -- Used to format Lua code
 			"clangd",
 			"jdtls",
-			"pyright",
+			"ruff_lsp",
+			"ts_ls",
 		})
 		require("mason-tool-installer").setup({ ensure_installed = ensure_installed })
 

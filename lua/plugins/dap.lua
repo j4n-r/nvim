@@ -19,6 +19,11 @@ return {
 				command = "gdb",
 				args = { "--interpreter=dap", "--eval-command", "set print pretty on" },
 			}
+			dap.adapters.python = {
+				type = "executable",
+				command = "/usr/bin/python", -- Path to your Python executable (can use python3 or venv if needed)
+				args = { "-m", "debugpy.adapter" }, -- Debugpy is used as the backend for Python
+			}
 			for _, language in ipairs({ "typescript", "javascript" }) do
 				dap.configurations[language] = {
 					{
@@ -104,6 +109,26 @@ return {
 						return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/", "file")
 					end,
 					cwd = "${workspaceFolder}",
+				},
+			}
+			dap.configurations.python = {
+				{
+					type = "python",
+					request = "launch",
+					name = "Launch File", -- Name of the configuration
+					program = "${file}", -- This will launch the current file
+					pythonPath = function()
+						-- Use the activated virtual environment, if available
+						local venv_path = os.getenv("VIRTUAL_ENV")
+						if venv_path then
+							return venv_path .. "/bin/python"
+						else
+							return "/usr/bin/python" -- Fallback to system Python
+						end
+					end,
+					args = {}, -- You can pass command-line arguments here
+					justMyCode = true, -- Focus on user code and skip library code
+					console = "integratedTerminal", -- Use integrated terminal for program output
 				},
 			}
 		end,

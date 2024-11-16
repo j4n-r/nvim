@@ -51,6 +51,33 @@ vim.keymap.set("n", "<C-k>", "<C-w>k")
 vim.keymap.set("n", "<C-l>", "<C-w>l")
 vim.keymap.set("i", "<C-\\>", "<C-\\><C-n>")
 
+-- Set VimTex options
+
+vim.g.vimtex_view_method = "zathura"
+vim.g.vimtext_compiler_method = "latexrun"
+-- Define the snippet as a function and add it to the global vim table
+
+function _G.insert_err_snippet()
+	-- Insert the snippet at the cursor position
+	vim.api.nvim_put({
+		"if err != nil {",
+		"\t",
+		"\t}",
+	}, "l", true, true)
+
+	-- Move the cursor inside the brackets
+	local cursor_pos = vim.api.nvim_win_get_cursor(0) -- get the current cursor position
+	vim.api.nvim_win_set_cursor(0, { cursor_pos[1] - 2, 1 }) -- move cursor to line with the inner tab
+end
+
+-- Map the hotkey to the snippet function
+vim.api.nvim_set_keymap(
+	"n", -- normal mode
+	"<leader>e", -- hotkey (<leader>e)
+	"<cmd>lua insert_err_snippet()<CR>", -- call the function
+	{ noremap = true, silent = true }
+)
+
 -- Setup lazy.nvim
 require("lazy").setup({
 	spec = {

@@ -7,6 +7,7 @@ vim.o.number = true
 vim.o.relativenumber = true
 vim.o.signcolumn = 'yes'
 vim.o.undofile = true
+vim.o.clipboard = 'unnamedplus'
 vim.o.ignorecase = true
 vim.o.smartcase = true
 vim.o.completeopt = 'menuone,noinsert,popup,fuzzy'
@@ -39,7 +40,12 @@ vim.pack.add({
   'https://github.com/nvim-orgmode/orgmode',
   { src = 'https://github.com/rose-pine/neovim', name = 'rose-pine' },
   'https://github.com/folke/flash.nvim',
+  'https://github.com/nvim-mini/mini.icons',
 })
+
+-- Icons for fzf-lua, oil, which-key; the devicons shim covers diffview.
+require('mini.icons').setup({})
+MiniIcons.mock_nvim_web_devicons()
 
 vim.cmd.colorscheme('rose-pine')
 

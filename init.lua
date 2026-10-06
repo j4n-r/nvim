@@ -3,8 +3,10 @@ vim.g.mapleader = ' '
 -- Experimental message/cmdline UI (Nvim 0.12)
 require('vim._core.ui2').enable({})
 
+vim.o.termguicolors = true
 vim.o.number = true
 vim.o.relativenumber = true
+vim.o.scrolloff = 10
 vim.o.signcolumn = 'yes'
 vim.o.undofile = true
 vim.o.clipboard = 'unnamedplus'
@@ -57,6 +59,7 @@ local ts_parsers = {
   'python',
   'javascript', 'typescript', 'tsx', 'json',
   'nix',
+  'rego',
   'roc',
 }
 -- nvim-treesitter pins tree-sitter-roc from before the new (Zig compiler)
@@ -171,7 +174,10 @@ vim.lsp.enable({
   'oxlint',
   'roc',
   'nixd',
+  'regal',
 })
+
+vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = 'Go to definition' })
 
 -- Completion only on demand: <C-Space> opens the menu, <C-y> accepts.
 vim.api.nvim_create_autocmd('LspAttach', {

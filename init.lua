@@ -10,11 +10,26 @@ vim.o.scrolloff = 10
 vim.o.signcolumn = 'yes'
 vim.o.undofile = true
 vim.o.clipboard = 'unnamedplus'
+vim.o.linebreak = true
+vim.o.breakindent = true
+vim.o.expandtab = true
+vim.o.tabstop = 4
+vim.o.shiftwidth = 4
 vim.o.ignorecase = true
 vim.o.smartcase = true
 vim.o.completeopt = 'menuone,noinsert,popup,fuzzy'
 
 vim.diagnostic.config({ virtual_text = true })
+
+-- Re-balance splits in every tab when the terminal is resized (fixed-width
+-- windows like the Diffview panel keep their width).
+vim.api.nvim_create_autocmd('VimResized', {
+  callback = function()
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+      vim.api.nvim_win_call(vim.api.nvim_tabpage_get_win(tab), function() vim.cmd('wincmd =') end)
+    end
+  end,
+})
 
 -- Plugins --------------------------------------------------------------------
 
@@ -43,6 +58,7 @@ vim.pack.add({
   { src = 'https://github.com/rose-pine/neovim', name = 'rose-pine' },
   'https://github.com/folke/flash.nvim',
   'https://github.com/nvim-mini/mini.icons',
+  'https://github.com/folke/zen-mode.nvim',
 })
 
 -- Icons for fzf-lua, oil, which-key; the devicons shim covers diffview.
@@ -104,6 +120,7 @@ require('conform').setup({
     typescript = { 'prettier' },
     typescriptreact = { 'prettier' },
     json = { 'prettier' },
+    markdown = { 'prettier' },
   },
   default_format_opts = { lsp_format = 'fallback' },
   format_on_save = { timeout_ms = 2000 },
@@ -112,7 +129,39 @@ vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
 
 -- Git: Neogit for magit-style status/commits (uses diffview for full diffs),
 -- gitsigns for hunks in the current file.
-require('neogit').setup({})
+-- Neogit diff colours as doom-rose-pine styles Magit in ~/.emacs.d: foam/love
+-- text on a faint tint, brighter and bold in the hunk under the cursor, dimmed
+-- context, iris hunk headers. Neogit only fills in groups that aren't set, so
+-- define them first and again on every colorscheme load.
+local function magit_diff_colors()
+  local p = require('rose-pine.palette')
+  local function mix(a, b, alpha)
+    local function ch(hex, i) return tonumber(hex:sub(i, i + 1), 16) end
+    return ('#%02x%02x%02x'):format(unpack(vim.tbl_map(function(i)
+      return math.floor(ch(a, i) * alpha + ch(b, i) * (1 - alpha) + 0.5)
+    end, { 2, 4, 6 })))
+  end
+  local function darken(c, alpha) return mix(c, '#000000', 1 - alpha) end
+  local hl = {
+    NeogitDiffAdd = { fg = darken(p.foam, 0.2), bg = mix(p.foam, p.base, 0.1) },
+    NeogitDiffAddHighlight = { fg = p.foam, bg = mix(p.foam, p.base, 0.2), bold = true },
+    NeogitDiffDelete = { fg = darken(p.love, 0.2), bg = mix(p.love, p.overlay, 0.1) },
+    NeogitDiffDeleteHighlight = { fg = p.love, bg = mix(p.love, p.overlay, 0.2), bold = true },
+    NeogitDiffContext = { fg = darken(p.text, 0.4), bg = p.base },
+    NeogitDiffContextHighlight = { fg = p.text, bg = p.surface },
+    NeogitHunkHeader = { fg = p.base, bg = mix(p.iris, p.base, 0.3) },
+    NeogitHunkHeaderHighlight = { fg = p.base, bg = p.iris, bold = true },
+  }
+  for group, spec in pairs(hl) do vim.api.nvim_set_hl(0, group, spec) end
+end
+magit_diff_colors()
+vim.api.nvim_create_autocmd('ColorScheme', { callback = magit_diff_colors })
+
+-- Neogit takes "green" from the String highlight, which is gold in rose-pine;
+-- use foam for what's left (word-level highlights, cursor line).
+require('neogit').setup({
+  highlight = { green = require('rose-pine.palette').foam },
+})
 local gs = require('gitsigns')
 gs.setup({})
 vim.keymap.set('n', '<leader>gg', '<cmd>Neogit<cr>', { desc = 'Neogit' })
@@ -124,6 +173,25 @@ vim.keymap.set('n', '<leader>gp', gs.preview_hunk_inline, { desc = 'Preview hunk
 vim.keymap.set('n', '<leader>gb', gs.blame_line, { desc = 'Blame line' })
 vim.keymap.set('n', ']h', function() gs.nav_hunk('next') end, { desc = 'Next hunk' })
 vim.keymap.set('n', '[h', function() gs.nav_hunk('prev') end, { desc = 'Previous hunk' })
+
+-- Review for the agent (lua/review.lua): in Diffview, ]c/[c walk every hunk
+-- across all files, ediff-style; <leader>gc comments on the hunk (or the
+-- visual selection), collected in <git-dir>/agent-review.md.
+local review = require('review')
+review.setup()
+local hunk_keys = {
+  { 'n', ']c', review.next_hunk, { desc = 'Next hunk (across files)' } },
+  { 'n', '[c', review.prev_hunk, { desc = 'Previous hunk (across files)' } },
+  { 'n', 'q', '<cmd>DiffviewClose<cr>', { desc = 'Close Diffview' } },
+}
+require('diffview').setup({
+  keymaps = { view = hunk_keys, file_panel = hunk_keys, file_history_panel = hunk_keys },
+})
+vim.keymap.set('n', '<leader>gc', review.comment, { desc = 'Review: comment on hunk' })
+vim.keymap.set('x', '<leader>gc', review.comment_visual, { desc = 'Review: comment on selection' })
+vim.keymap.set('n', '<leader>gC', review.open, { desc = 'Review: edit comments' })
+vim.keymap.set('n', '<leader>gy', review.yank, { desc = 'Review: copy comments' })
+vim.keymap.set('n', '<leader>gl', review.diff_commits, { desc = 'Diff commits (pick)' })
 
 -- Files: edit directories as buffers (replaces netrw). `-` opens the parent dir.
 require('oil').setup({})
@@ -153,6 +221,18 @@ require('orgmode').setup({
 -- Jump: `s` + any chars, then the label. Also adds labels/repeat to f/t/F/T.
 require('flash').setup({})
 vim.keymap.set({ 'n', 'x', 'o' }, 's', function() require('flash').jump() end, { desc = 'Flash jump' })
+
+-- Reading/writing: the buffer alone in a centred float, 100 columns of text
+-- plus the line-number gutter.
+require('zen-mode').setup({
+  window = {
+    width = function()
+      return 100 + math.max(vim.o.numberwidth, #tostring(vim.fn.line('$')) + 1)
+    end,
+    options = { signcolumn = 'no' },
+  },
+})
+vim.keymap.set('n', '<leader>z', '<cmd>ZenMode<cr>', { desc = 'Zen mode' })
 
 -- Key hints
 require('which-key').setup({})

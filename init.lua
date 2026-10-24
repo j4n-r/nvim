@@ -1,5 +1,8 @@
 vim.g.mapleader = ' '
 
+-- Clearing our group keeps :source $MYVIMRC from duplicating callbacks.
+local config_group = vim.api.nvim_create_augroup('user_config', { clear = true })
+
 -- Experimental message/cmdline UI (Nvim 0.12)
 require('vim._core.ui2').enable({})
 
@@ -19,14 +22,88 @@ vim.o.ignorecase = true
 vim.o.smartcase = true
 vim.o.completeopt = 'menuone,noinsert,popup,fuzzy'
 
-vim.diagnostic.config({ virtual_text = true })
+-- Command-line completion like vertico: fuzzy matches pop up as you type
+-- (see :h cmdline-autocompletion); <Tab>/<S-Tab> pick, nothing is inserted
+-- until then. The menu is nearly always open, so the arrows close it first:
+-- <Up>/<Down> walk history, <Left>/<Right> move the cursor.
+vim.o.wildmode = 'noselect:lastused,full'
+vim.o.wildoptions = 'pum,fuzzy'
+vim.o.pumheight = 12
+vim.api.nvim_create_autocmd('CmdlineChanged', {
+  group = config_group,
+  pattern = { ':', '/', '?' },
+  callback = function() vim.fn.wildtrigger() end,
+})
+for _, key in ipairs({ '<Up>', '<Down>', '<Left>', '<Right>' }) do
+  vim.keymap.set('c', key, function()
+    return vim.fn.wildmenumode() == 1 and '<C-e>' .. key or key
+  end, { expr = true })
+end
+
+-- Only errors are underlined: lints like clippy's span whole blocks, and a
+-- multi-line underline squiggles every line including indentation.
+-- ]d/[d show the diagnostic they land on in a float, like <C-w>d.
+vim.diagnostic.config({
+  virtual_text = true,
+  underline = { severity = vim.diagnostic.severity.ERROR },
+  jump = {
+    on_jump = function(diagnostic, bufnr)
+      if not diagnostic then return end
+      vim.diagnostic.open_float({ bufnr = bufnr, scope = 'cursor', focus = false })
+    end,
+  },
+})
 
 -- Re-balance splits in every tab when the terminal is resized (fixed-width
 -- windows like the Diffview panel keep their width).
 vim.api.nvim_create_autocmd('VimResized', {
+  group = config_group,
   callback = function()
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
       vim.api.nvim_win_call(vim.api.nvim_tabpage_get_win(tab), function() vim.cmd('wincmd =') end)
+    end
+  end,
+})
+
+-- Reload files changed outside Nvim (agents, git) when coming back to Nvim,
+-- switching buffers, or idling; 'autoread' alone only checks on some events.
+-- A buffer with unsaved edits isn't overwritten, Nvim asks instead.
+vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold' }, {
+  group = config_group,
+  callback = function()
+    if vim.fn.getcmdwintype() == '' then vim.cmd.checktime() end
+  end,
+})
+
+-- Help opens as a right-hand panel sized to its 78-column text instead of a
+-- half-screen horizontal split; next to an empty [No Name] it takes the tab.
+-- Help shown in a float (e.g. by a plugin) is left alone.
+local function is_empty_buffer(buf)
+  return vim.bo[buf].buftype == ''
+    and vim.api.nvim_buf_get_name(buf) == ''
+    and not vim.bo[buf].modified
+    and vim.api.nvim_buf_line_count(buf) == 1
+    and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ''
+end
+
+vim.api.nvim_create_autocmd('BufWinEnter', {
+  group = config_group,
+  callback = function(ev)
+    if vim.bo[ev.buf].buftype ~= 'help' then return end
+    local help_window = vim.api.nvim_get_current_win()
+    if vim.api.nvim_win_get_config(help_window).relative ~= '' then return end
+    local windows = vim.tbl_filter(function(win)
+      return vim.api.nvim_win_get_config(win).relative == ''
+    end, vim.api.nvim_tabpage_list_wins(0))
+    local other_window = windows[1] == help_window and windows[2] or windows[1]
+    if #windows == 2 and is_empty_buffer(vim.api.nvim_win_get_buf(other_window)) then
+      vim.cmd.only()
+    else
+      vim.cmd.wincmd('L')
+      local gutter_width = vim.fn.getwininfo(help_window)[1].textoff
+      vim.cmd.resize({ 80 + gutter_width, mods = { vertical = true } })
+      -- Keep the width when VimResized runs `wincmd =`.
+      vim.wo[help_window].winfixwidth = true
     end
   end,
 })
@@ -35,6 +112,7 @@ vim.api.nvim_create_autocmd('VimResized', {
 
 -- Parsers must match nvim-treesitter's queries, so rebuild them after it updates.
 vim.api.nvim_create_autocmd('PackChanged', {
+  group = config_group,
   callback = function(ev)
     if ev.data.spec.name == 'nvim-treesitter' and ev.data.kind == 'update' then
       require('nvim-treesitter').update()
@@ -81,6 +159,7 @@ local ts_parsers = {
 -- nvim-treesitter pins tree-sitter-roc from before the new (Zig compiler)
 -- syntax; use upstream with its own Neovim queries instead.
 vim.api.nvim_create_autocmd('User', {
+  group = config_group,
   pattern = 'TSUpdate',
   callback = function()
     require('nvim-treesitter.parsers').roc = {
@@ -96,23 +175,40 @@ if vim.fn.executable('tree-sitter') == 1 then
   require('nvim-treesitter').install(ts_parsers)
 end
 vim.api.nvim_create_autocmd('FileType', {
+  group = config_group,
   callback = function(ev) pcall(vim.treesitter.start, ev.buf) end,
 })
 
 -- Fuzzy finder
 local fzf = require('fzf-lua')
 fzf.setup({})
+-- Every vim.ui.select prompt (code actions, LSP choices, plugins) goes through
+-- fzf-lua, like completing-read through vertico.
+fzf.register_ui_select()
 vim.keymap.set('n', '<leader><leader>', fzf.files, { desc = 'Find files' })
-vim.keymap.set('n', '<leader>f', fzf.files, { desc = 'Find files' })
 vim.keymap.set('n', '<leader>/', fzf.live_grep, { desc = 'Grep' })
 vim.keymap.set('n', '<leader>b', fzf.buffers, { desc = 'Buffers' })
-vim.keymap.set('n', '<leader>h', fzf.helptags, { desc = 'Help' })
+-- Describe/help, like Emacs' C-h: <leader>h then a key.
+vim.keymap.set('n', '<leader>hh', fzf.helptags, { desc = 'Help tags' })
+vim.keymap.set('n', '<leader>hk', fzf.keymaps, { desc = 'Keymaps' })
+vim.keymap.set('n', '<leader>hv', fzf.nvim_options, { desc = 'Options' })
+vim.keymap.set('n', '<leader>hc', fzf.commands, { desc = 'Commands' })
+vim.keymap.set('n', '<leader>ha', fzf.autocmds, { desc = 'Autocmds' })
+vim.keymap.set('n', '<leader>hl', fzf.highlights, { desc = 'Highlight groups' })
+vim.keymap.set('n', '<leader>hm', fzf.manpages, { desc = 'Man pages' })
+vim.keymap.set('n', '<leader>hi', '<cmd>Inspect<cr>', { desc = 'Inspect highlight at cursor' })
+vim.keymap.set('n', '<leader>hM', '<cmd>messages<cr>', { desc = 'Messages' })
 vim.keymap.set('n', '<leader>d', fzf.diagnostics_workspace, { desc = 'Diagnostics' })
-vim.keymap.set('n', '<leader>s', fzf.lsp_live_workspace_symbols, { desc = 'Workspace symbols' })
+-- Search: <leader>s then a key.
+vim.keymap.set('n', '<leader>sg', fzf.live_grep, { desc = 'Grep project' })
+vim.keymap.set('n', '<leader>sw', fzf.grep_cword, { desc = 'Grep word under cursor' })
+vim.keymap.set('n', '<leader>sb', fzf.blines, { desc = 'Lines in buffer' })
+vim.keymap.set('n', '<leader>ss', fzf.lsp_document_symbols, { desc = 'Symbols in file' })
+vim.keymap.set('n', '<leader>sS', fzf.lsp_live_workspace_symbols, { desc = 'Symbols in project' })
 vim.keymap.set('n', '<leader>r', fzf.resume, { desc = 'Resume last picker' })
 
--- Formatting: prettier for JS/TS (no LSP for it), every other language
--- formats through its LSP server. Runs on save.
+-- Format on save with Prettier for the filetypes below; otherwise use an
+-- attached LSP formatter when available. Lua LSP formatting is disabled.
 require('conform').setup({
   formatters_by_ft = {
     javascript = { 'prettier' },
@@ -125,7 +221,15 @@ require('conform').setup({
   default_format_opts = { lsp_format = 'fallback' },
   format_on_save = { timeout_ms = 2000 },
 })
-vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
+-- gq formats through conform, but falls back to Vim's own line wrapping where
+-- no formatter runs (prose, commit messages, comments): conform's formatexpr
+-- alone never hands back to it, so gq would do nothing there.
+function _G.user_formatexpr()
+  local formatters, lsp = require('conform').list_formatters_to_run(0)
+  if #formatters == 0 and not lsp then return 1 end
+  return require('conform').formatexpr()
+end
+vim.o.formatexpr = 'v:lua.user_formatexpr()'
 
 -- Git: Neogit for magit-style status/commits (uses diffview for full diffs),
 -- gitsigns for hunks in the current file.
@@ -134,6 +238,9 @@ vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
 -- context, iris hunk headers. Neogit only fills in groups that aren't set, so
 -- define them first and again on every colorscheme load.
 local function magit_diff_colors()
+  -- The palette module picks its variant (main/moon/dawn) when first loaded;
+  -- reload it so a switch to the light variant gets light tints.
+  package.loaded['rose-pine.palette'] = nil
   local p = require('rose-pine.palette')
   local function mix(a, b, alpha)
     local function ch(hex, i) return tonumber(hex:sub(i, i + 1), 16) end
@@ -155,7 +262,7 @@ local function magit_diff_colors()
   for group, spec in pairs(hl) do vim.api.nvim_set_hl(0, group, spec) end
 end
 magit_diff_colors()
-vim.api.nvim_create_autocmd('ColorScheme', { callback = magit_diff_colors })
+vim.api.nvim_create_autocmd('ColorScheme', { group = config_group, callback = magit_diff_colors })
 
 -- Neogit takes "green" from the String highlight, which is gold in rose-pine;
 -- use foam for what's left (word-level highlights, cursor line).
@@ -164,7 +271,20 @@ require('neogit').setup({
 })
 local gs = require('gitsigns')
 gs.setup({})
-vim.keymap.set('n', '<leader>gg', '<cmd>Neogit<cr>', { desc = 'Neogit' })
+-- Like Magit, save the repo's modified files first so Neogit sees edits made
+-- in buffers (e.g. by an LSP rename). Neogit opens the repo of the cwd, so
+-- only files inside that repo are written; a buffer that fails is reported.
+vim.keymap.set('n', '<leader>gg', function()
+  local root = vim.fs.root(vim.uv.cwd(), '.git')
+  for _, buf in ipairs(root and vim.api.nvim_list_bufs() or {}) do
+    if vim.bo[buf].modified and vim.bo[buf].buftype == ''
+      and vim.fs.relpath(root, vim.api.nvim_buf_get_name(buf)) then
+      local ok, err = pcall(vim.api.nvim_buf_call, buf, function() vim.cmd('silent update') end)
+      if not ok then vim.notify(err, vim.log.levels.WARN) end
+    end
+  end
+  vim.cmd('Neogit')
+end, { desc = 'Save repo files, Neogit' })
 vim.keymap.set('n', '<leader>gd', '<cmd>DiffviewOpen<cr>', { desc = 'Diff working tree' })
 vim.keymap.set('n', '<leader>gh', '<cmd>DiffviewFileHistory %<cr>', { desc = 'File history' })
 vim.keymap.set('n', '<leader>gs', gs.stage_hunk, { desc = 'Stage/unstage hunk' })
@@ -183,6 +303,8 @@ local hunk_keys = {
   { 'n', ']c', review.next_hunk, { desc = 'Next hunk (across files)' } },
   { 'n', '[c', review.prev_hunk, { desc = 'Previous hunk (across files)' } },
   { 'n', 'q', '<cmd>DiffviewClose<cr>', { desc = 'Close Diffview' } },
+  -- Keep <leader>b as the buffer picker; <leader>e still focuses the files.
+  { 'n', '<leader>b', false },
 }
 require('diffview').setup({
   keymaps = { view = hunk_keys, file_panel = hunk_keys, file_history_panel = hunk_keys },
@@ -201,11 +323,14 @@ vim.keymap.set('n', '-', '<cmd>Oil<cr>', { desc = 'Open parent directory' })
 vim.cmd.packadd('nvim.undotree')
 vim.keymap.set('n', '<leader>u', '<cmd>Undotree<cr>', { desc = 'Undo tree' })
 
--- Textobjects. Built in: an/in (treesitter node). mini.ai adds a/i for
--- brackets, quotes, args (a), function calls (f), tags (t); F and c use the
--- treesitter queries from nvim-treesitter-textobjects.
+-- Textobjects. Built in: an/in in Visual mode grow/shrink the selection by
+-- treesitter node. mini.ai adds a/i for args (a), function calls (f), tags
+-- (t), any bracket (b) or quote (q); F and c use the treesitter queries from
+-- nvim-treesitter-textobjects. Its "next" variants move to aN/iN so they don't
+-- replace the built-in an/in.
 local ai = require('mini.ai')
 ai.setup({
+  mappings = { around_next = 'aN', inside_next = 'iN' },
   custom_textobjects = {
     F = ai.gen_spec.treesitter({ a = '@function.outer', i = '@function.inner' }),
     c = ai.gen_spec.treesitter({ a = '@class.outer', i = '@class.inner' }),
@@ -219,7 +344,11 @@ require('orgmode').setup({
 })
 
 -- Jump: `s` + any chars, then the label. Also adds labels/repeat to f/t/F/T.
-require('flash').setup({})
+-- f/t/F/T: after the char, the nearest matches get number labels to jump to
+-- directly; f/; still step to the next match.
+require('flash').setup({
+  modes = { char = { jump_labels = true, labels = '123456789' } },
+})
 vim.keymap.set({ 'n', 'x', 'o' }, 's', function() require('flash').jump() end, { desc = 'Flash jump' })
 
 -- Reading/writing: the buffer alone in a centred float, 100 columns of text
@@ -234,16 +363,23 @@ require('zen-mode').setup({
 })
 vim.keymap.set('n', '<leader>z', '<cmd>ZenMode<cr>', { desc = 'Zen mode' })
 
+-- Windows: <leader>w is <C-w>, so every built-in window command works after it.
+vim.keymap.set('n', '<leader>w', '<C-w>', { remap = true, desc = 'Window' })
+
 -- Key hints
-require('which-key').setup({})
+-- Popup only after a pause, so keys typed fluently don't flash it.
+require('which-key').setup({ delay = 400 })
 require('which-key').add({
   { '<leader>g', group = 'git' },
+  { '<leader>h', group = 'help' },
+  { '<leader>s', group = 'search' },
   { '<leader>o', group = 'org' },
 })
 
 -- LSP ------------------------------------------------------------------------
 -- Server configs live in lsp/<name>.lua. Default keymaps: K, grn, gra, grr,
--- gri, grt, gO, [d ]d, i_CTRL-S. See :h lsp-defaults.
+-- gri, grt, grx, gO, i_CTRL-S, and <C-]> to the definition (via 'tagfunc').
+-- See :h lsp-defaults. Diagnostics: ]d [d ]D [D <C-w>d, :h default-mappings.
 
 vim.lsp.enable({
   'gopls',
@@ -255,16 +391,21 @@ vim.lsp.enable({
   'roc',
   'nixd',
   'regal',
+  'lua_ls',
 })
 
-vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = 'Go to definition' })
-
 -- Completion only on demand: <C-Space> opens the menu, <C-y> accepts.
+-- gd goes to the LSP definition only where a server provides one; elsewhere
+-- it keeps Vim's own gd (local declaration).
 vim.api.nvim_create_autocmd('LspAttach', {
+  group = config_group,
   callback = function(ev)
     local client = assert(vim.lsp.get_client_by_id(ev.data.client_id))
     if client:supports_method('textDocument/completion') then
       vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = false })
+    end
+    if client:supports_method('textDocument/definition') then
+      vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = ev.buf, desc = 'Go to definition' })
     end
   end,
 })

@@ -136,6 +136,7 @@ vim.pack.add({
   'https://github.com/folke/flash.nvim',
   'https://github.com/nvim-mini/mini.icons',
   'https://github.com/folke/zen-mode.nvim',
+  'https://github.com/folke/snacks.nvim',
 })
 
 -- Icons for fzf-lua, oil, which-key; the devicons shim covers diffview.
@@ -143,6 +144,9 @@ require('mini.icons').setup({})
 MiniIcons.mock_nvim_web_devicons()
 
 vim.cmd.colorscheme('rose-pine')
+
+-- Images (Kitty graphics, e.g. Ghostty): opening a .png shows it in the buffer.
+require('snacks').setup({ image = { enabled = true } })
 
 -- Treesitter: Nvim ships the engine and a few parsers (c, lua, vim, vimdoc,
 -- query, markdown); nvim-treesitter compiles the rest (needs `tree-sitter` CLI).

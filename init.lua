@@ -132,7 +132,6 @@ vim.pack.add({
   'https://github.com/folke/which-key.nvim',
   'https://github.com/nvim-mini/mini.ai',
   { src = 'https://github.com/nvim-treesitter/nvim-treesitter-textobjects', version = 'main' },
-  'https://github.com/nvim-orgmode/orgmode',
   { src = 'https://github.com/rose-pine/neovim', name = 'rose-pine' },
   'https://github.com/folke/flash.nvim',
   'https://github.com/nvim-mini/mini.icons',
@@ -335,12 +334,6 @@ ai.setup({
     F = ai.gen_spec.treesitter({ a = '@function.outer', i = '@function.inner' }),
     c = ai.gen_spec.treesitter({ a = '@class.outer', i = '@class.inner' }),
   },
-})
-
--- Org
-require('orgmode').setup({
-  org_agenda_files = '~/notes/*.org',
-  org_default_notes_file = '~/notes/inbox.org',
 })
 
 -- Jump: `s` + any chars, then the label. Also adds labels/repeat to f/t/F/T.

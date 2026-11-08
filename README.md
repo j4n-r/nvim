@@ -39,5 +39,3 @@ Review comments are stored per worktree in `<git-dir>/agent-review.md`.
 comments, `<leader>gy` copies them, and `:ReviewClear` deletes them after a
 confirmation. Comments in Diffview require a two-way layout. `<leader>gl` picks
 commits to compare; selecting several includes the changes between them.
-
-Org files live in `~/notes/*.org`, with new notes going to `~/notes/inbox.org`.

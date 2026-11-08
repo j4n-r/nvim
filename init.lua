@@ -360,6 +360,38 @@ require('zen-mode').setup({
 })
 vim.keymap.set('n', '<leader>z', '<cmd>ZenMode<cr>', { desc = 'Zen mode' })
 
+-- Obsidian: show the current file in the running app, in a new tab. For a
+-- note, the URI's path finds the vault; everything but unreserved chars and /
+-- is encoded (vim.uri_encode leaves & and = alone, which would end the query
+-- value). Any other file opens in the ~/vault window like "Open file from
+-- outside the vault...": the CLI resolves a file:<absolute path> to it.
+local obsidian_vaults = { vim.fs.normalize('~/vault'), vim.fs.normalize('~/arrivo/Arrivo') }
+vim.keymap.set('n', '<leader>oo', function()
+  local file = vim.api.nvim_buf_get_name(0)
+  local stat = vim.bo.buftype == '' and vim.uv.fs_stat(file)
+  if not (stat and stat.type == 'file') then
+    vim.notify('Not a saved file', vim.log.levels.WARN)
+    return
+  end
+  local in_vault = vim.iter(obsidian_vaults):any(function(vault)
+    return vim.fs.relpath(vault, file) ~= nil
+  end)
+  if not in_vault then
+    -- The CLI reports errors on stdout and still exits 0.
+    vim.system({ 'obsidian', 'vault=vault', 'open', 'path=file:' .. file, 'newtab' }, { text = true },
+      function(res)
+        local out = vim.trim((res.stdout or '') .. (res.stderr or ''))
+        if res.code ~= 0 or out:match('^Error') then
+          vim.schedule(function() vim.notify('Obsidian: ' .. out, vim.log.levels.ERROR) end)
+        end
+      end)
+    return
+  end
+  local path = file:gsub('[^%w%-._~/]', function(c) return ('%%%02X'):format(c:byte()) end)
+  local _, err = vim.ui.open('obsidian://open?paneType=tab&path=' .. path)
+  if err then vim.notify(err, vim.log.levels.ERROR) end
+end, { desc = 'Open file in Obsidian' })
+
 -- Windows: <leader>w is <C-w>, so every built-in window command works after it.
 vim.keymap.set('n', '<leader>w', '<C-w>', { remap = true, desc = 'Window' })
 
@@ -370,7 +402,7 @@ require('which-key').add({
   { '<leader>g', group = 'git' },
   { '<leader>h', group = 'help' },
   { '<leader>s', group = 'search' },
-  { '<leader>o', group = 'org' },
+  { '<leader>o', group = 'obsidian' },
 })
 
 -- LSP ------------------------------------------------------------------------

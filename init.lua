@@ -22,6 +22,8 @@ vim.o.ignorecase = true
 vim.o.smartcase = true
 vim.o.completeopt = 'menuone,noinsert,popup,fuzzy'
 
+vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<cr>', { desc = 'Clear search highlight' })
+
 -- Command-line completion like vertico: fuzzy matches pop up as you type
 -- (see :h cmdline-autocompletion); <Tab>/<S-Tab> pick, nothing is inserted
 -- until then. The menu is nearly always open, so the arrows close it first:

@@ -263,6 +263,11 @@ local function magit_diff_colors()
     NeogitDiffContextHighlight = { fg = p.text, bg = p.surface },
     NeogitHunkHeader = { fg = p.base, bg = mix(p.iris, p.base, 0.3) },
     NeogitHunkHeaderHighlight = { fg = p.base, bg = p.iris, bold = true },
+    -- Changed lines in Diffview, by side (see the diff_buf_win_enter hook).
+    ReviewOldChange = { bg = mix(p.love, p.base, 0.1) },
+    ReviewOldText = { fg = p.love, bg = mix(p.love, p.base, 0.25), bold = true },
+    ReviewNewChange = { bg = mix(p.foam, p.base, 0.1) },
+    ReviewNewText = { fg = p.foam, bg = mix(p.foam, p.base, 0.25), bold = true },
   }
   for group, spec in pairs(hl) do vim.api.nvim_set_hl(0, group, spec) end
 end
@@ -313,6 +318,25 @@ local hunk_keys = {
 }
 require('diffview').setup({
   keymaps = { view = hunk_keys, file_panel = hunk_keys, file_history_panel = hunk_keys },
+  -- Show lines only in the old side as deletions, not additions.
+  enhanced_diff_hl = true,
+  hooks = {
+    -- Diff mode colours changed lines the same on both sides; Diffview knows
+    -- which side is old ('a') and which is new ('b'), so remap them per window,
+    -- keeping the mappings Diffview set itself.
+    diff_buf_win_enter = function(_, winid, ctx)
+      if ctx.symbol ~= 'a' and ctx.symbol ~= 'b' then return end
+      local side = ctx.symbol == 'a' and 'Old' or 'New'
+      local map = {}
+      for from, to in vim.wo[winid].winhighlight:gmatch('([^,:]+):([^,]+)') do map[from] = to end
+      map.DiffChange = 'Review' .. side .. 'Change'
+      map.DiffText = 'Review' .. side .. 'Text'
+      map.DiffTextAdd = 'Review' .. side .. 'Text'
+      local parts = {}
+      for from, to in pairs(map) do parts[#parts + 1] = from .. ':' .. to end
+      vim.wo[winid].winhighlight = table.concat(parts, ',')
+    end,
+  },
 })
 vim.keymap.set('n', '<leader>gc', review.comment, { desc = 'Review: comment on hunk' })
 vim.keymap.set('x', '<leader>gc', review.comment_visual, { desc = 'Review: comment on selection' })
